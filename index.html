@@ -1757,10 +1757,7 @@ function getRecips(){
   if(v==='all-ministry')return DB.people.filter(p=>p.category==='ministry'&&p.email).map(p=>({id:p.id,email:p.email,name:p.fname}));
   if(v==='all-polyleads')return(DB.polyleads||[]).filter(p=>p.email).map(p=>({id:p.id,email:p.email,name:p.fname||'Friend'}));
   if(v==='all-overdue'){const ids=[...new Set(DB.payments.filter(p=>p.status==='overdue').map(p=>p.personId))];return ids.map(id=>DB.people.find(p=>p.id===id)).filter(p=>(p&&p.email)).map(p=>({id:p.id,email:p.email,name:p.fname}));}
-  if(v==='custom'){
-    const raw=document.getElementById('compose-custom-emails').value;
-    const emails=raw.split(/[\n,]+/).map(e=>e.trim()).filter(e=>e.includes('@'));
-    return emails.map(e=>({id:e,email:e,name:e.split('@')[0]}));
+  if(v==='custom'){ const raw=document.getElementById('compose-custom-emails').value; const entries=raw.split(/[\n,]+/).map(e=>e.trim()).filter(e=>e.includes('@')); return entries.map(entry=>{ const colonIdx=entry.indexOf(':'); if(colonIdx>-1){ const email=entry.slice(0,colonIdx).trim(); const name=entry.slice(colonIdx+1).trim(); return{id:email,email,name:name||email.split('@')[0]}; } return{id:entry,email:entry,name:entry.split('@')[0]}; }); }
   }
   if(v.startsWith('ind:')){const indId=document.getElementById('compose-ind-sel').value||v.split(':')[1];const p=DB.people.find(x=>x.id===indId);return (p&&p.email)?[{id:p.id,email:p.email,name:p.fname}]:[];}
   return[];
