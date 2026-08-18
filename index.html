@@ -1775,16 +1775,36 @@ function previewEmail(){
   document.getElementById('preview-body').textContent=body.replace(/{{name}}/g,recips[0].name).slice(0,400)+(body.length>400?'...':'');
   document.getElementById('preview-modal').classList.add('open');
 }
+// Detects a full HTML document pasted into the Message box, so it
+// gets sent as-is instead of mangled by the plain-text wrapper.
+function isFullHtmlDoc(text){
+  const t=text.trim().toLowerCase();
+  return t.startsWith('<!doctype')||t.startsWith('<html');
+}
+
 async function sendEmail(confirmed=false){
   const recips=getRecips(),subj=document.getElementById('compose-subject').value.trim(),bodyText=document.getElementById('compose-body').value.trim();
   const fileId=document.getElementById('compose-attachment').value.trim();
   if(!recips.length||!subj||!bodyText){toast('⚠ Missing recipients, subject, or message',true);return;}
   if(!confirmed&&!confirm('Send to '+recips.length+' recipient'+(recips.length!==1?'s':'')+(fileId?' with attachment':'')+' ?'))return;
   const btn=document.getElementById('send-btn');btn.disabled=true;btn.textContent='Sending...';
+  const isHtmlDoc=isFullHtmlDoc(bodyText);
   try{
     showLoad(`Sending to ${recips.length}...`);
-    if(recips.length===1){const body=buildEmailHtml(recips[0].name,subj,`<p>${bodyText.replace(/{{name}}/g,recips[0].name).replace(/\n/g,'</p><p>')}</p>`);await sEmail(recips[0].email,subj,body,fileId);}
-    else{const body=buildEmailHtml('{{name}}',subj,`<p>${bodyText.replace(/\n/g,'</p><p>')}</p>`);await sBulk(recips,subj,body,fileId);}
+    if(isHtmlDoc){
+      // Full designed email pasted in — send it exactly as-is.
+      // {{name}} still works if you typed it into the pasted HTML.
+      if(recips.length===1){
+        const body=bodyText.replace(/{{name}}/g,recips[0].name);
+        await sEmail(recips[0].email,subj,body,fileId);
+      }else{
+        await sBulk(recips,subj,bodyText,fileId);
+      }
+    }else{
+      // Plain message box — use the CRM's normal branded template.
+      if(recips.length===1){const body=buildEmailHtml(recips[0].name,subj,`<p>${bodyText.replace(/{{name}}/g,recips[0].name).replace(/\n/g,'</p><p>')}</p>`);await sEmail(recips[0].email,subj,body,fileId);}
+      else{const body=buildEmailHtml('{{name}}',subj,`<p>${bodyText.replace(/\n/g,'</p><p>')}</p>`);await sBulk(recips,subj,body,fileId);}
+    }
     const v=document.getElementById('compose-to').value;
     const lbl=v==='all-fitness'?'All Fitness Clients':v==='all-ministry'?'All Ministry Attendees':v==='all-polyleads'?'All Poly Dance Leads':v==='all-overdue'?'All Overdue Clients':v==='custom'?'Custom Recipients':recips[0].name;
     logEmail(subj,lbl,recips.length,MODE);hideLoad();
@@ -1792,22 +1812,6 @@ async function sendEmail(confirmed=false){
     renderEmailLog();toast(`✓ Sent to ${recips.length}!`);
   }catch(e){hideLoad();toast('⚠ Send failed',true);}
   btn.disabled=false;btn.textContent='✉️ Send Email';
-}
-function logEmail(subj,toLabel,count,cat){
-  DB.emaillog.unshift({id:uid(),sentAt:new Date().toISOString(),subject:subj,toLabel,recipientCount:String(count),category:cat});
-  DB.emaillog=DB.emaillog.slice(0,50);saveTab('emaillog').catch(()=>{});
-}
-function renderEmailLog(){
-  const log=DB.emaillog,el=document.getElementById('email-log');
-  document.getElementById('log-count').textContent=log.length+' sent';
-  if(!log.length){el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No emails sent yet</div></div>';return;}
-  el.innerHTML=log.map(e=>{
-    const dt=new Date(e.sentAt);
-    const ts=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    const cc=e.category==='ministry'?'var(--violet)':'var(--orange)';
-    return`<div class="email-log-entry"><div class="email-log-hdr"><div class="email-log-sub">${e.subject}</div><div class="email-log-time">${ts}</div></div>
-      <div style="font-size:.74rem;color:var(--muted)">To: <span style="color:${cc};font-weight:600">${e.toLabel}</span> · <span style="color:var(--gold);font-weight:600">${e.recipientCount} recipient${e.recipientCount!=='1'?'s':''}</span></div></div>`;
-  }).join('');
 }
 
 // ── Email Template ────────────────────────────────────────────────
